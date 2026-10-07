@@ -1,6 +1,14 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>Crew List Scanner</title>
 <meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<meta name="theme-color" content="#0b5c8a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Crew List">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <style>
 /* Layout: one column, a voyage header block over a numbered manifest table; phone-first, the camera button always in reach */
 :root{
@@ -66,6 +74,8 @@ tr.example input{color:var(--muted);font-style:italic}
 .dbg{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px 16px;display:grid;gap:10px}
 .dbg summary{cursor:pointer;font-weight:600}
 .dbg pre{margin:0;max-height:320px;overflow:auto;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:10px;font:12px/1.45 var(--mono);white-space:pre-wrap;word-break:break-all}
+.install{background:var(--surface);border:2px solid var(--accent);border-radius:6px;padding:14px 16px;display:grid;gap:10px}.install p{margin:0;max-width:62ch}
+.offline{font:600 .8rem var(--body);color:var(--ok)}
 .confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 @media (prefers-reduced-motion:no-preference){.pill.reading{animation:pulse 1.2s ease-in-out infinite}}
 @keyframes pulse{50%{opacity:.45}}
@@ -74,8 +84,14 @@ tr.example input{color:var(--muted);font-style:italic}
 <div class="wrap">
   <header>
     <h1>Crew List Scanner</h1>
+    <p class="offline" id="offlineState" hidden></p>
     <p class="sub">Photograph each crew member's passport or ID. Names, nationality and document numbers are read automatically. Check every row against the document before you submit the list.</p>
   </header>
+
+  <section class="install" id="installHint" hidden>
+    <p><b>Install on this iPhone:</b> tap the Share button <span aria-hidden="true">(square with arrow)</span>, then <b>Add to Home Screen</b>. It then opens like an app and works with no signal.</p>
+    <button class="btn" id="installClose" type="button">Got it</button>
+  </section>
 
   <section class="voyage" aria-label="Voyage details">
     <div class="field"><label class="label" for="vessel">Vessel</label><input id="vessel" placeholder="e.g. Christina"></div>
@@ -743,6 +759,9 @@ $("csvBtn").onclick = async () => {
       const w = await P.Filesystem.writeFile({path: name, data, directory: "CACHE", encoding: "utf8"});
       await P.Share.share({title: name, files: [w.uri], dialogTitle: "Save or send the crew list"});
       setStatus("Crew list ready to save or send.");
+    } else if(navigator.canShare && navigator.canShare({files:[new File([data], fileName(), {type:"text/csv"})]})){
+      await navigator.share({files:[new File([data], fileName(), {type:"text/csv"})], title: fileName()});
+      setStatus("Crew list ready to save or send.");
     } else {
       const a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob([data], {type:"text/csv"})); a.download = fileName();
@@ -750,7 +769,7 @@ $("csvBtn").onclick = async () => {
       setStatus("CSV saved.");
     }
   }catch(e){
-    if(/cancel/i.test(e?.message||"")) return;
+    if(/cancel|abort/i.test((e?.name||"")+(e?.message||""))) return;
     setStatus("Couldn't share the file. Use Copy list instead.", true);
   }
 };
@@ -774,6 +793,22 @@ function resetClear(){ $("clearWrap").innerHTML = '<button class="btn danger" id
 load(); render();
 $("dbgCopy").onclick = async () => { try{ await navigator.clipboard.writeText(lastRead); setStatus("Copied."); }catch(e){ const r=document.createRange(); r.selectNodeContents($("dbgText")); const sel=getSelection(); sel.removeAllRanges(); sel.addRange(r); setStatus("Text selected. Use Copy from the menu."); } };
 
+
+// Offline install (web version only; the native app has its files built in)
+(function(){
+  const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
+  let hide = false; try{ hide = localStorage.getItem("installHintClosed")==="1"; }catch(_){}
+  if(!native && ios && !standalone && !hide) $("installHint").hidden = false;
+  $("installClose").onclick = () => { $("installHint").hidden = true; try{ localStorage.setItem("installHintClosed","1"); }catch(_){} };
+  if(native || !("serviceWorker" in navigator) || !window.isSecureContext) return;
+  const showReady = () => { const o=$("offlineState"); o.textContent = "✓ Ready to work offline"; o.hidden = false; };
+  navigator.serviceWorker.register("sw.js").then(reg => {
+    if(navigator.serviceWorker.controller) { showReady(); return; }
+    const o=$("offlineState"); o.textContent = "Saving for offline use…"; o.style.color = "var(--muted)"; o.hidden = false;
+    navigator.serviceWorker.ready.then(() => { o.style.color = ""; showReady(); });
+  }).catch(() => {});
+})();
 </script>
 
 </body></html>
