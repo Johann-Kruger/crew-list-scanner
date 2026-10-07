@@ -1,0 +1,779 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Crew List Scanner</title>
+<meta name="format-detection" content="telephone=no">
+<style>
+/* Layout: one column, a voyage header block over a numbered manifest table; phone-first, the camera button always in reach */
+:root{
+  --bg:#f3f5f6; --surface:#ffffff; --ink:#14212b; --muted:#5d6b75; --line:#d5dde2;
+  --accent:#0b5c8a; --accent-ink:#ffffff; --flag:#e8a317; --ok:#2f7d4f; --bad:#b3362c; --soft:#e7eef3;
+  --display:"Barlow Condensed","Arial Narrow",sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e161c; --surface:#16222b; --ink:#e3eaee; --muted:#93a3ae; --line:#2a3a46;
+  --accent:#4fa3d6; --accent-ink:#06131b; --flag:#f0b43c; --ok:#5cbf83; --bad:#ef7b70; --soft:#1d2d38; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e161c; --surface:#16222b; --ink:#e3eaee; --muted:#93a3ae; --line:#2a3a46;
+  --accent:#4fa3d6; --accent-ink:#06131b; --flag:#f0b43c; --ok:#5cbf83; --bad:#ef7b70; --soft:#1d2d38; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 var(--body);padding-inline:16px;padding-block:20px 120px}
+.wrap{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1{font:700 2rem/1.1 var(--display);letter-spacing:.01em;margin:0;text-wrap:balance}
+.sub{color:var(--muted);margin:4px 0 0;max-width:62ch}
+.label{font:600 .72rem/1 var(--body);text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}
+.voyage{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:8px 10px;width:100%;min-width:0}
+input:focus-visible,select:focus-visible,button:focus-visible,.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.btn{font:600 1rem/1 var(--body);border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:4px;padding:11px 16px;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-size:1.05rem;padding:14px 20px}
+.btn.danger{color:var(--bad)}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.status{font-size:.92rem;color:var(--muted)}
+.status.err{color:var(--bad)}
+.manifest{background:var(--surface);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.mhead{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;padding:14px 16px;border-bottom:1px solid var(--line)}
+.mhead h2{font:700 1.3rem/1 var(--display);margin:0;letter-spacing:.02em}
+.count{font:600 .9rem var(--mono);color:var(--muted)}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:860px;font-variant-numeric:tabular-nums}
+th{text-align:left;padding:10px 8px;background:var(--soft);border-bottom:1px solid var(--line)}
+td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td input,td select{background:transparent;border-color:transparent;padding:6px 6px}
+td input:hover,td select:hover{border-color:var(--line)}
+td.num{font:600 .9rem var(--mono);color:var(--muted);width:2.5rem}
+td.doc input{font-family:var(--mono);letter-spacing:.03em}
+.thumb{width:44px;height:32px;object-fit:cover;border-radius:3px;border:1px solid var(--line);display:block}
+.pill{display:inline-block;font:600 .7rem/1 var(--body);text-transform:uppercase;letter-spacing:.06em;padding:5px 7px;border-radius:999px;white-space:nowrap}
+.pill.reading{background:var(--soft);color:var(--accent)}
+.pill.check{background:color-mix(in srgb,var(--flag) 22%,transparent);color:var(--ink)}
+.pill.ok{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.pill.fail{background:color-mix(in srgb,var(--bad) 16%,transparent);color:var(--bad)}
+.pill.ex{background:var(--soft);color:var(--muted)}
+tr.example td{color:var(--muted)}
+tr.example input{color:var(--muted);font-style:italic}
+.note{font-size:.85rem;color:var(--muted);margin:0;padding:10px 16px;border-top:1px solid var(--line)}
+.del{background:none;border:0;color:var(--muted);cursor:pointer;font-size:1.2rem;padding:4px 8px;border-radius:4px}
+.del:hover{color:var(--bad)}
+.dock{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-top:1px solid var(--line);display:flex;justify-content:center}
+.dock .btn{width:100%;max-width:480px;justify-content:center}
+.tips{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
+.tips ul{margin:10px 0 0;padding-left:1.1rem;display:grid;gap:6px;max-width:70ch;color:var(--ink)}
+.dbg{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px 16px;display:grid;gap:10px}
+.dbg summary{cursor:pointer;font-weight:600}
+.dbg pre{margin:0;max-height:320px;overflow:auto;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:10px;font:12px/1.45 var(--mono);white-space:pre-wrap;word-break:break-all}
+.confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+@media (prefers-reduced-motion:no-preference){.pill.reading{animation:pulse 1.2s ease-in-out infinite}}
+@keyframes pulse{50%{opacity:.45}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Crew List Scanner</h1>
+    <p class="sub">Photograph each crew member's passport or ID. Names, nationality and document numbers are read automatically. Check every row against the document before you submit the list.</p>
+  </header>
+
+  <section class="voyage" aria-label="Voyage details">
+    <div class="field"><label class="label" for="vessel">Vessel</label><input id="vessel" placeholder="e.g. Christina"></div>
+    <div class="field"><label class="label" for="master">Master / Skipper</label><input id="master" placeholder="Full name"></div>
+    <div class="field"><label class="label" for="port">Port of departure</label><input id="port" placeholder="e.g. Cape Town"></div>
+    <div class="field"><label class="label" for="vdate">Date</label><input id="vdate" type="date"></div>
+  </section>
+
+  <div class="actions">
+    <button class="btn" id="addManual" type="button">+ Add row by hand</button>
+    <button class="btn" id="csvBtn" type="button">Save / send CSV</button>
+    <button class="btn" id="copyBtn" type="button">Copy list</button>
+    <span id="clearWrap"><button class="btn danger" id="clearBtn" type="button">Clear list</button></span>
+    <span class="status" id="status" role="status" aria-live="polite"></span>
+  </div>
+
+  <section class="manifest" aria-label="Crew list">
+    <div class="mhead"><h2>Crew list</h2><span class="count" id="count">0 crew</span></div>
+    <div class="scroll">
+      <table>
+        <thead><tr>
+          <th class="label">No.</th><th class="label">Photo</th><th class="label">Surname</th><th class="label">Given names</th>
+          <th class="label">Nationality</th><th class="label">Document</th><th class="label">ID / Passport no.</th>
+          <th class="label">Rank</th><th class="label">Status</th><th></th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <p class="note">The list is kept only on this phone until you clear it. Photos are read on this phone and are not stored or sent anywhere.</p>
+  </section>
+
+  <section class="tips" aria-label="Photo tips">
+    <p class="label">For a good read</p>
+    <ul>
+      <li><b>Passport:</b> photograph the photo page. The two lines of letters and &lt;&lt;&lt; at the bottom must be sharp and fill most of the width.</li>
+      <li><b>Smart ID card:</b> photograph the <b>back</b>, with the big barcode sharp. That gives the best result. The front also works if the back won't read.</li>
+      <li><b>Green ID book:</b> photograph the page with the photo and barcode. Keep the barcode sharp and the whole page in the frame.</li>
+      <li>Avoid glare from lights and windows. Lay the document flat, hold the phone straight above it.</li>
+    </ul>
+  </section>
+
+  <details class="dbg" id="dbg" hidden>
+    <summary>What the reader saw on the last scan</summary>
+    <p class="status">If a scan keeps failing, tap Copy and send this to whoever maintains the app so the reader can be tuned. It contains the document text, so share it only with them.</p>
+    <button class="btn" id="dbgCopy" type="button">Copy</button>
+    <pre id="dbgText"></pre>
+  </details>
+</div>
+
+<div class="dock">
+  <label class="btn primary" for="photo" id="photoLabel">📷 Scan passport or ID</label>
+  <input id="photo" type="file" accept="image/*" multiple hidden>
+</div>
+
+<script src="vendor/tesseract.min.js"></script>
+<script src="vendor/zxing.min.js"></script>
+<script>
+// Green barcoded SA ID book: ID number from the barcode (or printed digits), names from printed text.
+(function(root){
+const luhnOK = n => { let s=0; for(let i=0;i<n.length;i++){ let d=+n[n.length-1-i]; if(i%2){ d*=2; if(d>9)d-=9; } s+=d; } return s%10===0; };
+function validSAID(n){
+  if(!/^\d{13}$/.test(n) || !luhnOK(n)) return false;
+  const mm=+n.slice(2,4), dd=+n.slice(4,6);
+  return mm>=1 && mm<=12 && dd>=1 && dd<=31 && (n[10]==="0" || n[10]==="1");
+}
+function idFromText(t){
+  // printed number is often spaced: 850101 5800 08 8
+  for(const line of String(t).split(/\n/)){
+    const d = line.replace(/[OoQD]/g,"0").replace(/[Il|]/g,"1").replace(/[^0-9]/g,"");
+    for(let i=0;i+13<=d.length;i++){ const c=d.slice(i,i+13); if(validSAID(c)) return c; }
+  }
+  return "";
+}
+// Reads 1D barcodes (green ID book) and PDF417 (back of smart ID card).
+// Returns {id, fields} or null. fields is set when the barcode carries the holder's details.
+function readBarcode(ZX, gray, w, h){
+  const F = ZX.BarcodeFormat;
+  // Separate passes: the big 2D barcode first (smart ID), then striped 1D barcodes (ID book).
+  // In one combined pass the striped card-number barcode on the smart ID back wins and hides the 2D one.
+  const passes = [[F.PDF_417], [F.CODE_39, F.CODE_128, F.CODE_93, F.ITF, F.CODABAR]];
+  let unread = null;
+  for(const formats of passes){
+    const hints = new Map();
+    hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS, formats);
+    hints.set(ZX.DecodeHintType.TRY_HARDER, true);
+    const reader = new ZX.MultiFormatReader(); reader.setHints(hints);
+    for(const Bin of [ZX.HybridBinarizer, ZX.GlobalHistogramBinarizer]){
+      try{
+        const res = reader.decode(new ZX.BinaryBitmap(new Bin(new ZX.RGBLuminanceSource(gray, w, h))), hints);
+        const txt = res.getText() || "";
+        const fields = parseSmartBarcode(txt);
+        if(fields) return {id: fields.id, fields, raw: txt};
+        const id = idFromText(txt);
+        if(id) return {id, fields:null, raw: txt};
+        if(!unread) unread = {id:"", fields:null, raw: txt, format: String(res.getBarcodeFormat())};
+        break;
+      }catch(e){ /* not found */ }
+    }
+  }
+  return unread;
+}
+// Smart ID PDF417: SURNAME|NAMES|SEX|NATIONALITY|IDNUMBER|DOB|COUNTRY|STATUS|...
+function parseSmartBarcode(txt){
+  if(!txt.includes("|")) return null;
+  const f = txt.split("|").map(x=>x.trim());
+  const i = f.findIndex(x => validSAID(x.replace(/\s/g,"")));
+  if(i < 2) return null;
+  const id = f[i].replace(/\s/g,"");
+  const natRaw = (f[i-1]||"").toUpperCase();
+  const nationality = /^(RSA|ZAF|SOUTH AFRICA)/.test(natRaw) ? "South African" : (natRaw || nationalityFromID(id));
+  return {surname: cleanName(f[0]), given: cleanName(f[1]), nationality, id};
+}
+function readBarcodeID(ZX, gray, w, h){ const r = readBarcode(ZX, gray, w, h); return r ? r.id : ""; }
+function cleanName(s){
+  return s.toUpperCase().replace(/[^A-Z\- ']/g," ").replace(/\s+/g," ").trim();
+}
+// Names on SA documents are printed in capitals: drop words OCR produced in lower case (background noise)
+function capsOnly(s){
+  return cleanName(String(s).split(/\s+/).filter(w => /[A-Z]{2,}|^[A-Z]$/.test(w) && !/[a-z]/.test(w)).join(" "));
+}
+function parseBook(text){
+  const lines = String(text).split(/\n/).map(l=>l.trim()).filter(Boolean);
+  const after = (re) => {
+    for(let i=0;i<lines.length;i++){
+      if(re.test(lines[i])){
+        // value may be on the same line after the label, or on the next line
+        const same = cleanName(lines[i].replace(re,"").replace(/^.*\//,""));
+        if(same.replace(/[^A-Z]/g,"").length>=2 && !/NAME|VAN|VOOR/.test(same)) return same;
+        for(let j=i+1;j<Math.min(lines.length,i+3);j++){
+          const v = capsOnly(lines[j]);
+          if(v.replace(/[^A-Z]/g,"").length>=2 && !/SURNAME|FORENAME|VOORNAME|COUNTRY|GEBOORTE|BIRTH|^NAMES?$|^SEX|NATIONALITY|IDENTITY|STATUS/.test(v)) return v;
+        }
+      }
+    }
+    return "";
+  };
+  const all = lines.join("\n").toUpperCase();
+  const book = /VOORNAME|FORENAME|GEBOORTE/.test(all);
+  const card = !book && /IDENTITY\s*CARD|IDENTITY\s*NUMBER|CITIZEN|SMART/.test(all) && !/PASSPORT/.test(all);
+  let nationality = "";
+  const nat = after(/N\s*A\s*T\s*I\s*O\s*N\s*A\s*L\s*I\s*T\s*Y/i);
+  if(/^(RSA|ZAF|SOUTH AFRICA)/.test(nat)) nationality = "South African"; else if(nat.length>=3) nationality = nat;
+  return {surname: after(/S\s*U\s*R\s*N\s*A\s*M\s*E|^\s*VAN\s*\//i),
+          given: after(/F\s*O\s*R\s*E\s*N\s*A\s*M\s*E\s*S?|VOORNAME|^\W*N\s*A\s*M\s*E\s*S?\W*$/i),
+          nationality, kind: book ? "book" : card ? "card" : ""};
+}
+function nationalityFromID(n){ return n[10]==="0" ? "South African" : ""; }
+root.GreenBook = {validSAID, idFromText, readBarcode, readBarcodeID, parseSmartBarcode, parseBook, nationalityFromID};
+})(typeof window!=="undefined"?window:globalThis);
+</script>
+<script>
+// MRZ finder + parser for ICAO 9303 TD1 (ID cards), TD2 and TD3 (passports).
+(function(root){
+const NAT = {ZAF:"South African",NAM:"Namibian",MOZ:"Mozambican",AGO:"Angolan",ZWE:"Zimbabwean",MWI:"Malawian",LSO:"Mosotho",SWZ:"Swazi",BWA:"Motswana",ZMB:"Zambian",TZA:"Tanzanian",KEN:"Kenyan",UGA:"Ugandan",COD:"Congolese (DRC)",COG:"Congolese",CMR:"Cameroonian",GHA:"Ghanaian",NGA:"Nigerian",SEN:"Senegalese",CPV:"Cape Verdean",STP:"São Toméan",MDG:"Malagasy",MUS:"Mauritian",SYC:"Seychellois",COM:"Comorian",ETH:"Ethiopian",SOM:"Somali",EGY:"Egyptian",MAR:"Moroccan",
+PHL:"Filipino",IDN:"Indonesian",CHN:"Chinese",TWN:"Taiwanese",KOR:"South Korean",JPN:"Japanese",VNM:"Vietnamese",THA:"Thai",MMR:"Myanmar",IND:"Indian",LKA:"Sri Lankan",BGD:"Bangladeshi",PAK:"Pakistani",
+RUS:"Russian",UKR:"Ukrainian",GBR:"British",IRL:"Irish",ESP:"Spanish",PRT:"Portuguese",NOR:"Norwegian",ISL:"Icelandic",DNK:"Danish",SWE:"Swedish",FIN:"Finnish",NLD:"Dutch",BEL:"Belgian",D:"German",DEU:"German",FRA:"French",ITA:"Italian",GRC:"Greek",POL:"Polish",HRV:"Croatian",ROU:"Romanian",TUR:"Turkish",
+USA:"American",CAN:"Canadian",BRA:"Brazilian",ARG:"Argentine",CHL:"Chilean",PER:"Peruvian",CUB:"Cuban",AUS:"Australian",NZL:"New Zealander",FJI:"Fijian",KIR:"I-Kiribati",PNG:"Papua New Guinean"};
+
+const W = [7,3,1];
+const val = c => c==="<" ? 0 : /\d/.test(c) ? +c : c.charCodeAt(0)-55;
+function cd(s){ let t=0; for(let i=0;i<s.length;i++) t += val(s[i])*W[i%3]; return t%10; }
+const okCd = (s, c) => /\d/.test(c) && cd(s)===+c;
+
+// OCR confusion fixes by field kind
+const TO_DIGIT = {O:"0",Q:"0",D:"0",U:"0",I:"1",L:"1",T:"1",Z:"2",S:"5",B:"8",G:"6",A:"4"};
+const TO_ALPHA = {"0":"O","1":"I","2":"Z","5":"S","8":"B","6":"G","4":"A"};
+const digits = s => s.replace(/[^0-9<]/g, c => TO_DIGIT[c]||c);
+const alpha = s => s.replace(/[0-9]/g, c => TO_ALPHA[c]||c);
+
+function cleanLine(t){
+  // OCR often reads filler '<' as K, C, L or « ; normalise obvious runs
+  t = t.toUpperCase().replace(/[«‹(\[{]/g,"<").replace(/\s+/g,"");
+  t = t.replace(/[^A-Z0-9<]/g,"");
+  // runs of filler misread: e.g. "<<K<<", "KKK" at line end
+  for(let i=0;i<3;i++) t = t.replace(/<[KCLE]</g,"<<").replace(/<[KCLE]{1,2}$/,"<<");
+  t = t.replace(/([<])[KCL]{2,}/g,(m,a)=>a+"<".repeat(m.length-1));
+  return t;
+}
+function fit(t, n){ return t.length>=n ? t.slice(0,n) : t + "<".repeat(n-t.length); }
+
+// try substitutions so the number passes its check digit
+function fixNumber(num, check){
+  num = num.replace(/[^A-Z0-9<]/g,"");
+  if(okCd(num, check)) return {num, ok:true};
+  const alts = {O:"0","0":"O",I:"1","1":"I",S:"5","5":"S",B:"8","8":"B",Z:"2","2":"Z",G:"6","6":"G",D:"0",Q:"0"};
+  for(let i=0;i<num.length;i++){
+    const a = alts[num[i]]; if(!a) continue;
+    const n2 = num.slice(0,i)+a+num.slice(i+1);
+    if(okCd(n2, check)) return {num:n2, ok:true};
+  }
+  return {num, ok:false};
+}
+function names(field){
+  field = alpha(field).replace(/<+$/,"");
+  const [sur, ...rest] = field.split("<<");
+  const given = rest.join(" ").replace(/<+/g," ").replace(/\s+/g," ").trim();
+  // drop trailing 1-2 letter junk after the real given names (misread fillers)
+  const g = given.split(" ").filter((w,i,arr)=>!(i===arr.length-1 && arr.length>1 && w.length<=1 && /[KCLE]/.test(w)));
+  return {surname: sur.replace(/<+/g," ").trim(), given: g.join(" ")};
+}
+const sumSA = n => { let s=0; for(let i=0;i<n.length;i++){ let d=+n[n.length-1-i]; if(i%2){ d*=2; if(d>9)d-=9; } s+=d; } return s%10===0; };
+const nat = c => NAT[c.replace(/<+$/,"")] || c.replace(/<+/g,"");
+
+function parseTD3(l1, l2){
+  l1 = fit(l1,44); l2 = fit(l2,44);
+  const iss = alpha(l1.slice(2,5));
+  const n = names(l1.slice(5));
+  const docRaw = l2.slice(0,9), docCd = digits(l2[9]);
+  const fx = fixNumber(docRaw, docCd);
+  const natC = alpha(l2.slice(10,13));
+  const dob = digits(l2.slice(13,19)), dobOk = okCd(dob, digits(l2[19]));
+  const exp = digits(l2.slice(21,27)), expOk = okCd(exp, digits(l2[27]));
+  const score = (fx.ok?2:0)+(dobOk?1:0)+(expOk?1:0);
+  return {format:"TD3", docType:"Passport", surname:n.surname, given:n.given, natCode:natC, nationality:nat(natC), docNo:fx.num.replace(/<+/g,""), docOk:fx.ok, score, issuer:iss};
+}
+function parseTD2(l1, l2){
+  l1 = fit(l1,36); l2 = fit(l2,36);
+  const n = names(l1.slice(5));
+  const fx = fixNumber(l2.slice(0,9), digits(l2[9]));
+  const natC = alpha(l2.slice(10,13));
+  const dobOk = okCd(digits(l2.slice(13,19)), digits(l2[19]));
+  const expOk = okCd(digits(l2.slice(21,27)), digits(l2[27]));
+  const pass = l1[0]==="P";
+  return {format:"TD2", docType: pass?"Passport":"ID Card", surname:n.surname, given:n.given, natCode:natC, nationality:nat(natC), docNo:fx.num.replace(/<+/g,""), docOk:fx.ok, score:(fx.ok?2:0)+(dobOk?1:0)+(expOk?1:0)};
+}
+function parseTD1(l1, l2, l3){
+  l1 = fit(l1,30); l2 = fit(l2,30); l3 = fit(l3,30);
+  const iss = alpha(l1.slice(2,5));
+  const fx = fixNumber(l1.slice(5,14), digits(l1[14]));
+  const opt = l1.slice(15,30);
+  const natC = alpha(l2.slice(15,18));
+  const dobOk = okCd(digits(l2.slice(0,6)), digits(l2[6]));
+  const expOk = okCd(digits(l2.slice(8,14)), digits(l2[14]));
+  const n = names(l3);
+  let out = {format:"TD1", docType:"ID Card", surname:n.surname, given:n.given, natCode:natC, nationality:nat(natC), docNo:fx.num.replace(/<+/g,""), docOk:fx.ok, score:(fx.ok?2:0)+(dobOk?1:0)+(expOk?1:0)};
+  if(iss==="ZAF" || natC==="ZAF"){
+    const idn = digits(opt).replace(/<+/g,"").slice(0,13);
+    if(/^\d{13}$/.test(idn)){ out.docType="SA ID"; out.docNo=idn; out.docOk=sumSA(idn); out.cardNo=fx.num.replace(/<+/g,""); }
+  }
+  return out;
+}
+
+// Anchor search: find a passport/ID data line anywhere in a messy line by its check digits.
+function anchorTD3(line){
+  let best=null;
+  for(let off=0; off+28<=line.length; off++){
+    const s=line.slice(off);
+    if(!/[MFX<]/.test(s[20]||"")) continue;
+    const fx=fixNumber(s.slice(0,9), digits(s[9]||""));
+    const a=okCd(digits(s.slice(13,19)), digits(s[19]||"")), b=okCd(digits(s.slice(21,27)), digits(s[27]||""));
+    const sc=(fx.ok?2:0)+(a?1:0)+(b?1:0);
+    if(sc>=3 && (!best||sc>best.sc)) best={sc,s,fx};
+  }
+  return best;
+}
+function anchorTD1(line){
+  let best=null;
+  for(let off=0; off+18<=line.length; off++){
+    const s=line.slice(off);
+    if(!/[MFX<]/.test(s[7]||"")) continue;
+    const a=okCd(digits(s.slice(0,6)), digits(s[6]||"")), b=okCd(digits(s.slice(8,14)), digits(s[14]||""));
+    if(a && b && /^[A-Z<]{3}$/.test(alpha(s.slice(15,18)))) { best={sc:2,s}; break; }
+  }
+  return best;
+}
+function namesFrom(l){
+  if(!l) return {surname:"",given:""};
+  const i=l.search(/[PIAC][A-Z<][A-Z]{3}[A-Z]/);
+  const f = i>=0 ? l.slice(i+5) : l;
+  return names(f);
+}
+function anchored(lines){
+  const out=[];
+  for(let i=0;i<lines.length;i++){
+    const t3=anchorTD3(lines[i]);
+    if(t3){
+      const s=t3.s, natC=alpha(s.slice(10,13));
+      let prev = lines[i-1]||""; if(prev.length<20 && lines[i-2]) prev=lines[i-2];
+      const n=namesFrom(prev);
+      out.push({format:"TD3", docType:"Passport", surname:n.surname, given:n.given, natCode:natC, nationality:nat(natC), docNo:t3.fx.num.replace(/<+/g,""), docOk:t3.fx.ok, score:t3.sc+(n.surname?0:-1)});
+    }
+    const t1=anchorTD1(lines[i]);
+    if(t1){
+      const s=t1.s, natC=alpha(s.slice(15,18));
+      const l1=lines[i-1]||"", l3=lines[i+1]||"";
+      const j=l1.search(/[IAC][A-Z<][A-Z]{3}/);
+      const l1s = j>=0 ? fit(l1.slice(j),30) : fit(l1,30);
+      const fx=fixNumber(l1s.slice(5,14), digits(l1s[14]));
+      const n=names(l3);
+      const r={format:"TD1", docType:"ID Card", surname:n.surname, given:n.given, natCode:natC, nationality:nat(natC), docNo:fx.num.replace(/<+/g,""), docOk:fx.ok, score:2+(fx.ok?2:0)+(n.surname?0:-1)};
+      if(natC==="ZAF"){
+        const idn=digits(l1s.slice(15)).replace(/<+/g,"");
+        const m=idn.match(/\d{13}/) || digits(l1).replace(/<+/g,"").match(/\d{13}/);
+        if(m){ r.docType="SA ID"; r.docNo=m[0]; r.docOk=sumSA(m[0]); r.score=Math.max(r.score, 2+(r.docOk?2:0)+(n.surname?0:-1)); }
+      }
+      out.push(r);
+    }
+  }
+  return out;
+}
+
+// Pick MRZ lines out of raw OCR text and parse the best candidate.
+function findMRZ(text){
+  const all = text.split(/\n/).map(cleanLine).filter(l=>l.length>=18);
+  const anch = anchored(all);
+  const lines = text.split(/\n/).map(cleanLine).filter(l => l.length>=24 && (l.match(/</g)||[]).length>=2);
+  const cands = [];
+  for(let i=0;i<lines.length;i++){
+    const a=lines[i], b=lines[i+1], c=lines[i+2];
+    if(b && Math.abs(a.length-44)<=5 && Math.abs(b.length-44)<=5 && /^[P][A-Z<]/.test(a)) cands.push(parseTD3(a,b));
+    if(b && Math.abs(a.length-36)<=4 && Math.abs(b.length-36)<=4 && /^[PIAC][A-Z<]/.test(a)) cands.push(parseTD2(a,b));
+    if(b && c && Math.abs(a.length-30)<=4 && Math.abs(b.length-30)<=4 && Math.abs(c.length-30)<=4 && /^[IAC][A-Z<]/.test(a)) cands.push(parseTD1(a,b,c));
+    // lenient: passport second line found even if first line start is mangled
+    if(b && a.length>=40 && b.length>=40 && !/^P/.test(a)) cands.push(parseTD3("P<"+a.slice(2),b));
+  }
+  cands.push(...anch);
+  cands.sort((x,y)=>y.score-x.score);
+  return cands.find(c => (c.surname || c.docOk) && c.score>=1) || null;
+}
+root.MRZ = {findMRZ, parseTD1, parseTD2, parseTD3, cleanLine};
+})(typeof window!=="undefined"?window:globalThis);
+
+</script>
+<script>
+const $ = id => document.getElementById(id);
+const RANKS = ["","Skipper","Mate","Engineer","Bosun","Deckhand","Cook","Fisherman","Observer","Other"];
+const EXAMPLE = {id:"ex",example:true,surname:"VAN DER MERWE",given:"PIETER JOHANNES",nationality:"South African",docType:"SA ID",docNo:"8501015800088",rank:"Mate",state:"ex"};
+let rows = [];
+const thumbs = {};
+
+function load(){
+  try{
+    const d = JSON.parse(localStorage.getItem("crewlist") || "null");
+    if(d){ rows = (d.rows||[]).map(r => ({...r, state: r.state==="reading" ? "fail" : r.state})); ["vessel","master","port","vdate"].forEach(k => { if(d[k]) $(k).value = d[k]; }); }
+  }catch(e){}
+  if(!$("vdate").value) $("vdate").value = new Date().toISOString().slice(0,10);
+}
+function save(){
+  try{ localStorage.setItem("crewlist", JSON.stringify({rows, vessel:$("vessel").value, master:$("master").value, port:$("port").value, vdate:$("vdate").value})); }catch(e){}
+}
+["vessel","master","port","vdate"].forEach(k => $(k).addEventListener("input", save));
+
+function setStatus(msg, err){ const s=$("status"); s.textContent = msg||""; s.className = "status"+(err?" err":""); }
+
+const PILL = {reading:["reading","Reading…"],check:["check","Check"],ok:["ok","Checked"],fail:["fail","Couldn't read"],manual:["ok","Manual"],ex:["ex","Example"]};
+
+function render(){
+  const tb = $("rows"); tb.textContent = "";
+  const list = rows.length ? rows : [EXAMPLE];
+  list.forEach((r,i) => {
+    const tr = document.createElement("tr");
+    if(r.example) tr.className = "example";
+    const td = (cls) => { const c=document.createElement("td"); if(cls) c.className=cls; tr.append(c); return c; };
+    td("num").textContent = String(i+1);
+    const ph = td();
+    if(thumbs[r.id]){ const im=document.createElement("img"); im.src=thumbs[r.id]; im.className="thumb"; im.alt="Document photo"; ph.append(im); }
+    else { ph.innerHTML = '<span class="label">—</span>'; }
+    const mkInput = (key, cls, ph) => {
+      const c = td(cls); const inp = document.createElement("input");
+      inp.id = `f-${r.id}-${key}`; inp.value = r[key]||""; inp.placeholder = ph||""; inp.setAttribute("aria-label", key);
+      if(r.example) inp.disabled = true;
+      inp.addEventListener("input", () => { r[key] = inp.value; if(r.state==="check") { r.state="ok"; updatePill(tr,r); } save(); });
+      c.append(inp);
+    };
+    mkInput("surname","","Surname");
+    mkInput("given","","Given names");
+    mkInput("nationality","","Nationality");
+    mkInput("docType","","Passport / ID");
+    mkInput("docNo","doc","Number");
+    const rc = td(); const sel = document.createElement("select");
+    sel.id = `f-${r.id}-rank`; sel.setAttribute("aria-label","Rank");
+    RANKS.forEach(o => { const op=document.createElement("option"); op.value=o; op.textContent=o||"Choose…"; sel.append(op); });
+    sel.value = r.rank||""; if(r.example) sel.disabled = true;
+    sel.addEventListener("change", () => { r.rank = sel.value; save(); });
+    rc.append(sel);
+    const sc = td(); sc.className = "st";
+    const pill = document.createElement("span"); sc.append(pill);
+    if(r.state==="check"){ pill.title = r.note || "Compare with the document, then edit any field to mark checked"; }
+    const dc = td();
+    if(!r.example){
+      const b = document.createElement("button"); b.className="del"; b.type="button"; b.textContent="×"; b.setAttribute("aria-label",`Remove row ${i+1}`);
+      b.onclick = () => { rows = rows.filter(x => x!==r); delete thumbs[r.id]; save(); render(); };
+      dc.append(b);
+    }
+    tb.append(tr);
+    updatePill(tr, r);
+  });
+  $("count").textContent = `${rows.length} crew`;
+}
+function updatePill(tr, r){
+  const p = tr.querySelector(".st span"); const [cls,txt] = PILL[r.state]||PILL.manual;
+  p.className = "pill "+cls; p.textContent = txt;
+  if(r.state==="check" && r.note) p.textContent = "Check: "+r.note;
+  if(r.state==="fail" && r.note) p.textContent = "Couldn't read: "+r.note;
+}
+
+const uid = () => Math.random().toString(36).slice(2,9);
+
+$("addManual").onclick = () => { rows.push({id:uid(),surname:"",given:"",nationality:"",docType:"",docNo:"",rank:"",state:"manual"}); save(); render(); const r=rows[rows.length-1]; $(`f-${r.id}-surname`)?.focus(); };
+
+/* ---------- On-phone reader (machine-readable zone) ---------- */
+const abs = p => new URL(p, location.href).href;
+let ocrWorker = null, lastRead = "";
+const workers = {}, starting = {};
+function showDebug(){ $("dbg").hidden = !lastRead; $("dbgText").textContent = lastRead; }
+function withTimeout(p, ms, label){ return Promise.race([p, new Promise((_,rej)=>setTimeout(()=>rej(new Error(label+" timed out")), ms))]); }
+// lang "ocrb" reads passport/ID strips; lang "eng" reads printed text (green ID book)
+async function startReader(lang = "ocrb"){
+  if(workers[lang]) return workers[lang];
+  if(starting[lang]) return starting[lang];
+  starting[lang] = (async () => {
+    if(!window.Tesseract) throw new Error("reader library didn't load");
+    // everything is bundled inside the app, so scanning works with no signal at sea
+    const base = {langPath: abs("ocr/lang"), gzip:true, cacheMethod:"none"};
+    const plans = [
+      {name:"A", opts:{...base, workerPath: abs("ocr/worker.min.js"), workerBlobURL:false, corePath: abs("ocr/core/")}},
+      {name:"B", opts:{...base, workerPath: abs("ocr/worker.min.js"), workerBlobURL:true, corePath: abs("ocr/core/")}}
+    ];
+    const errs = [];
+    for(const p of plans){
+      try{
+        const w = await withTimeout(Tesseract.createWorker(lang, 1, {...p.opts, errorHandler:()=>{}}), 90000, "start");
+        await w.setParameters(lang==="ocrb"
+          ? {tessedit_char_whitelist:"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<", tessedit_pageseg_mode:"6"}
+          : {tessedit_pageseg_mode:"3"});
+        workers[lang] = w; if(lang==="ocrb") ocrWorker = w; return w;
+      }catch(e){ errs.push(p.name+": "+(e?.message||e)); }
+    }
+    throw new Error(errs.join("; "));
+  })();
+  try{ return await starting[lang]; } finally { delete starting[lang]; }
+}
+async function loadBitmap(file){
+  try{ return await createImageBitmap(file, {imageOrientation:"from-image"}); }
+  catch(e){
+    const url = URL.createObjectURL(file);
+    try{ const img = new Image(); img.src = url; await img.decode(); return img; } finally { setTimeout(()=>URL.revokeObjectURL(url), 5000); }
+  }
+}
+// Find the small tilt (degrees) that makes text rows line up best
+function estimateSkew(src, rot){
+  const sw = src.width, sh = src.height, swap = rot===90 || rot===270;
+  const rw = swap ? sh : sw, rh = swap ? sw : sh, sc = 700/Math.max(rw, rh);
+  const W = Math.max(1,Math.round(rw*sc)), H = Math.max(1,Math.round(rh*sc));
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const x = c.getContext("2d", {willReadFrequently:true});
+  x.scale(sc, sc); x.translate(rw/2, rh/2); x.rotate(rot*Math.PI/180); x.drawImage(src, -sw/2, -sh/2);
+  const p = x.getImageData(0,0,W,H).data, g = new Float32Array(W*H);
+  for(let i=0,j=0;j<g.length;i+=4,j++) g[j] = .3*p[i]+.59*p[i+1]+.11*p[i+2];
+  // dark pixels that are darker than their horizontal neighbourhood (text strokes)
+  const pts = [];
+  const r = 6;
+  for(let yy=0;yy<H;yy++){ let sum=0; for(let xx=0;xx<Math.min(W,2*r+1);xx++) sum+=g[yy*W+xx];
+    for(let xx=r;xx<W-r;xx++){ const m=sum/(2*r+1); if(g[yy*W+xx] < m-25) pts.push(xx, yy); sum += (g[yy*W+xx+r+1]||0) - g[yy*W+xx-r]; } }
+  if(pts.length < 200) return 0;
+  let best = 0, bestScore = -1;
+  for(let a=-12; a<=12; a+=0.5){
+    const t = Math.tan(a*Math.PI/180), hist = new Float32Array(H + W + 2), off = W;
+    for(let i=0;i<pts.length;i+=2){ const row = Math.round(pts[i+1] - pts[i]*t) + off; if(row>=0 && row<hist.length) hist[row]++; }
+    let score = 0; for(let k=1;k<hist.length;k++){ const d = hist[k]-hist[k-1]; score += d*d; }
+    if(score > bestScore){ bestScore = score; best = a; }
+  }
+  return best;
+}
+function prep(src, rot, crop, bin, skew){
+  // rotate whole photo first (quarter turn + tilt correction), then optionally keep only the lower part, scaled up
+  const sw = src.width, sh = src.height;
+  const swap = rot===90 || rot===270;
+  const rw = swap ? sh : sw, rh = swap ? sw : sh;
+  const y0 = crop ? Math.round(rh*(1-crop)) : 0, ch = rh - y0;
+  const scale = Math.min(2400/rw, Math.max(1, 1800/rw));
+  const c = document.createElement("canvas");
+  c.width = Math.round(rw*scale); c.height = Math.round(ch*scale);
+  const x = c.getContext("2d", {willReadFrequently:true});
+  x.fillStyle = "#fff"; x.fillRect(0,0,c.width,c.height);
+  x.scale(scale, scale); x.translate(0, -y0);
+  x.translate(rw/2, rh/2); x.rotate((rot - (skew||0))*Math.PI/180); x.drawImage(src, -sw/2, -sh/2);
+  const W = c.width, H = c.height, d = x.getImageData(0,0,W,H), p = d.data;
+  const g = new Float32Array(W*H);
+  for(let i=0,j=0;j<g.length;i+=4,j++) g[j] = .3*p[i]+.59*p[i+1]+.11*p[i+2];
+  if(bin){
+    // local-mean threshold: copes with glare and shadow across the page
+    const I = new Float64Array((W+1)*(H+1));
+    for(let yy=1;yy<=H;yy++){ let row=0; for(let xx=1;xx<=W;xx++){ row += g[(yy-1)*W+xx-1]; I[yy*(W+1)+xx] = I[(yy-1)*(W+1)+xx] + row; } }
+    const r = Math.max(8, Math.round(W/60));
+    for(let yy=0;yy<H;yy++){ const a=Math.max(0,yy-r), b=Math.min(H,yy+r+1);
+      for(let xx=0;xx<W;xx++){ const l=Math.max(0,xx-r), rr=Math.min(W,xx+r+1);
+        const sum = I[b*(W+1)+rr]-I[a*(W+1)+rr]-I[b*(W+1)+l]+I[a*(W+1)+l];
+        const mean = sum/((b-a)*(rr-l)); const v = g[yy*W+xx] < mean*0.86 ? 0 : 255; const k=(yy*W+xx)*4; p[k]=p[k+1]=p[k+2]=v; } }
+  } else {
+    let lo=255, hi=0; for(let j=0;j<g.length;j+=7){ if(g[j]<lo) lo=g[j]; if(g[j]>hi) hi=g[j]; }
+    const k = 255/Math.max(40, hi-lo);
+    for(let j=0,i=0;j<g.length;j++,i+=4){ const v=(g[j]-lo)*k; p[i]=p[i+1]=p[i+2]= v<0?0:v>255?255:v; }
+  }
+  x.setTransform(1,0,0,1,0,0); x.putImageData(d,0,0);
+  return c;
+}
+function barcodeGray(src, rot, skew, width){
+  const sw = src.width, sh = src.height, swap = rot===90 || rot===270;
+  const rw = swap ? sh : sw, rh = swap ? sw : sh, sc = Math.min(1, width/rw);
+  const c = document.createElement("canvas"); c.width = Math.round(rw*sc); c.height = Math.round(rh*sc);
+  const x = c.getContext("2d", {willReadFrequently:true});
+  x.fillStyle = "#fff"; x.fillRect(0,0,c.width,c.height);
+  x.scale(sc, sc); x.translate(rw/2, rh/2); x.rotate((rot - skew)*Math.PI/180); x.drawImage(src, -sw/2, -sh/2);
+  const d = x.getImageData(0,0,c.width,c.height).data, gray = new Uint8ClampedArray(c.width*c.height);
+  for(let i=0,j=0;j<gray.length;i+=4,j++) gray[j] = .3*d[i]+.59*d[i+1]+.11*d[i+2];
+  return {gray, w:c.width, h:c.height};
+}
+// green ID book barcode: quick, tried before anything else
+function barcodeID(src, skews){
+  if(!window.ZXing) return null;
+  let unread = null;
+  for(const rot of [0, 90]){
+    if(!(rot in skews)) skews[rot] = estimateSkew(src, rot);
+    // barcode readers are fussy about bar width in pixels, so try a few sizes and tilts
+    for(const width of rot ? [1600, 2200] : [1600, 2200, 1200]){
+      for(const extra of rot ? [0] : [0, 2, -2]){
+        const g = barcodeGray(src, rot, skews[rot] + extra, width);
+        const hit = GreenBook.readBarcode(ZXing, g.gray, g.w, g.h);
+        if(hit && hit.id) return hit;
+        if(hit && !unread) unread = hit;
+      }
+    }
+  }
+  return unread;
+}
+// Read the printed page (green ID book or smart ID front). Fields are merged across passes,
+// keeping the fullest value seen for each.
+async function readBook(src, skews, seen, barId, plan, prior){
+  const w = await startReader("eng");
+  let best = prior || {surname:"", given:"", nationality:"", kind:"", id: barId, sc:-1};
+  const words = v => v ? v.split(" ").length : 0;
+  for(const [rot,bin] of plan || [[0,0],[0,1],[90,0],[270,0],[180,0]]){
+    if(!(rot in skews)) skews[rot] = estimateSkew(src, rot);
+    const res = await w.recognize(prep(src, rot, 0, bin, skews[rot]));
+    const txt = res.data.text || "";
+    seen.push(`[printed text, turn ${rot}°, tilt ${skews[rot]}°${bin?", black/white":""}]\n`+txt.trim());
+    const n = GreenBook.parseBook(txt);
+    const b = {...best};
+    if(words(n.surname) > words(b.surname)) b.surname = n.surname;
+    if(words(n.given) > words(b.given)) b.given = n.given;
+    if(n.nationality && !b.nationality) b.nationality = n.nationality;
+    if(n.kind && !b.kind) b.kind = n.kind;
+    if(!b.id) b.id = barId || GreenBook.idFromText(txt);
+    b.sc = (b.surname?1:0) + (b.given?1:0) + (b.id?2:0);
+    best = b;
+    if(best.sc >= 4 && bin) break;      // complete, and checked in both grey and black/white
+  }
+  return best;
+}
+function fillFromBook(r, b, fromBarcode){
+  r.surname = b.surname; r.given = b.given; r.docType = b.kind==="card" ? "SA ID" : "SA ID book"; r.docNo = b.id;
+  r.nationality = b.nationality || (b.id ? GreenBook.nationalityFromID(b.id) : "");
+  r.state = (b.surname || b.id) ? "check" : "fail";
+  const miss = [!b.surname && "surname", !b.given && "names", !b.id && "ID number"].filter(Boolean);
+  r.note = miss.length ? "type in " + miss.join(", ") : (!r.nationality ? "enter nationality" : "");
+}
+async function readOnPhone(file, r){
+  const src = await loadBitmap(file);
+  const seen = [], skews = {};
+  try{
+    // 1. Barcodes (fast): smart ID card back carries all details; green ID book carries the ID number
+    const bar = barcodeID(src, skews);
+    if(bar && bar.fields){
+      const f = bar.fields;
+      seen.push("[smart ID barcode] " + [f.surname, f.given, f.nationality, f.id].join(" | "));
+      r.surname = f.surname; r.given = f.given; r.nationality = f.nationality;
+      r.docType = "SA ID"; r.docNo = f.id; r.state = "check"; r.note = f.nationality ? "" : "enter nationality";
+      return;
+    }
+    if(!bar) seen.push("[barcode] none found");
+    else if(!bar.id) seen.push("[barcode read but not understood, type " + bar.format + ", " + bar.raw.length + " characters]\n" + bar.raw.slice(0,400).replace(/[^\x20-\x7E]/g,"·"));
+    if(bar && bar.id){
+      seen.push("[barcode] " + bar.id);
+      const b = await readBook(src, skews, seen, bar.id);
+      fillFromBook(r, b, true); return;
+    }
+    // 2. One quick look at the printed text: a smart ID front or ID book goes straight to the printed-page reader
+    const first = await readBook(src, skews, seen, bar && bar.id || "", [[0,0]]);
+    if(first.kind || (first.id && first.surname)){
+      const b = await readBook(src, skews, seen, first.id, [[0,1],[90,0],[270,0],[180,0]], first);
+      fillFromBook(r, b, false); return;
+    }
+    // 3. Passport machine-readable strip
+    const w = await startReader("ocrb");
+    let best = null;
+    const tries = [[0,.45,0],[0,.45,1],[0,0,0],[180,.45,0],[90,.45,0],[270,.45,0],[0,.3,1],[90,0,0],[270,0,0],[180,.45,1]];
+    for(const [rot,crop,bin] of tries){
+      if(!(rot in skews)) skews[rot] = estimateSkew(src, rot);
+      const res = await w.recognize(prep(src, rot, crop, bin, skews[rot]));
+      const txt = res.data.text || "";
+      seen.push(`[strip, turn ${rot}°, tilt ${skews[rot]}°, ${crop?"bottom "+Math.round(crop*100)+"%":"whole photo"}${bin?", black/white":""}]\n`+txt.trim());
+      const m = MRZ.findMRZ(txt);
+      if(m && (!best || m.score > best.score)) best = m;
+      if(best && best.score >= 4) break;
+    }
+    if(best){
+      r.surname = best.surname; r.given = best.given; r.nationality = best.nationality;
+      r.docType = best.docType; r.docNo = best.docNo; r.state = "check";
+      r.note = !best.docOk ? (best.docType==="SA ID" ? "ID check digit fails" : "number check fails") : (best.score < 4 ? "some fields unclear" : "");
+      return;
+    }
+    // 4. No strip: read the printed page in the other orientations
+    const b = await readBook(src, skews, seen, "", [[0,1],[90,0],[270,0],[180,0]], first);
+    if(b.sc >= 2) { fillFromBook(r, b, false); return; }
+    r.state = "fail"; r.note = "nothing readable found";
+  } finally {
+    lastRead = seen.join("\n\n"); showDebug();
+    try{ src.close?.(); }catch(_){}
+  }
+}
+function updateRow(r){
+  const i = rows.indexOf(r); const tr = $("rows").children[i];
+  if(tr) updatePill(tr, r);
+}
+
+async function readDoc(file, r){
+  try{ await readOnPhone(file, r); }
+  catch(e){
+    r.state = "fail"; r.note = "reader failed";
+    setStatus("The reader couldn't start on this phone ("+(e?.message||e)+"). Add rows by hand for now.", true);
+  }
+  save(); render();
+}
+function luhn(n){ let s=0; for(let i=0;i<n.length;i++){ let d=+n[n.length-1-i]; if(i%2){ d*=2; if(d>9)d-=9; } s+=d; } return s%10===0; }
+
+$("photo").addEventListener("change", async e => {
+  const files = [...e.target.files]; e.target.value = "";
+  if(!files.length) return;
+  setStatus((files.length>1 ? `Reading ${files.length} documents` : "Reading document") + (!ocrWorker ? " (first scan loads the reader, 10 to 20 seconds)…" : "…"));
+  const jobs = files.map(f => {
+    const r = {id:uid(),surname:"",given:"",nationality:"",docType:"",docNo:"",rank:"",state:"reading"};
+    rows.push(r);
+    try{ thumbs[r.id] = URL.createObjectURL(f); }catch(_){}
+    return [f,r];
+  });
+  render();
+  for(const [f,r] of jobs){ await readDoc(f, r); }
+  const bad = jobs.filter(([,r]) => r.state==="fail").length;
+  if(!$("status").classList.contains("err")) setStatus(bad ? `${bad} couldn't be read. Retake or fill in by hand.` : "Done. Check each row against the document.");
+});
+
+function csv(){
+  const esc = v => `"${String(v??"").replace(/"/g,'""')}"`;
+  const head = [["Vessel",$("vessel").value],["Master",$("master").value],["Port",$("port").value],["Date",$("vdate").value],[]];
+  const cols = ["No.","Surname","Given names","Nationality","Document","ID / Passport no.","Rank"];
+  const body = rows.map((r,i)=>[i+1,r.surname,r.given,r.nationality,r.docType,r.docNo,r.rank]);
+  return [...head, cols, ...body].map(l => l.map(esc).join(",")).join("\r\n");
+}
+function plain(){
+  const h = `CREW LIST — ${$("vessel").value||"Vessel"} — ${$("port").value||""} — ${$("vdate").value}\nMaster: ${$("master").value}\n\n`;
+  return h + rows.map((r,i)=>`${i+1}. ${r.surname}, ${r.given} | ${r.nationality} | ${r.docType} ${r.docNo} | ${r.rank}`).join("\n");
+}
+
+const Cap = window.Capacitor;
+const native = !!(Cap && Cap.isNativePlatform && Cap.isNativePlatform());
+const P = native ? Cap.Plugins : {};
+function fileName(){ return `Crew list ${($("vessel").value||"vessel").trim()} ${$("vdate").value}.csv`.replace(/[\/\\:*?"<>|]/g,"-"); }
+$("csvBtn").onclick = async () => {
+  if(!rows.length){ setStatus("Add at least one crew member first.", true); return; }
+  const data = "\ufeff" + csv();
+  try{
+    if(native){
+      const name = fileName();
+      const w = await P.Filesystem.writeFile({path: name, data, directory: "CACHE", encoding: "utf8"});
+      await P.Share.share({title: name, files: [w.uri], dialogTitle: "Save or send the crew list"});
+      setStatus("Crew list ready to save or send.");
+    } else {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([data], {type:"text/csv"})); a.download = fileName();
+      document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+      setStatus("CSV saved.");
+    }
+  }catch(e){
+    if(/cancel/i.test(e?.message||"")) return;
+    setStatus("Couldn't share the file. Use Copy list instead.", true);
+  }
+};
+$("copyBtn").onclick = async () => {
+  if(!rows.length){ setStatus("Add at least one crew member first.", true); return; }
+  try{ await navigator.clipboard.writeText(plain()); setStatus("Crew list copied."); }
+  catch(e){
+    if(native){ try{ await P.Share.share({title:"Crew list", text: plain()}); return; }catch(_){ return; } }
+    setStatus("Copying isn't allowed here. Download the CSV instead.", true);
+  }
+};
+$("clearBtn").onclick = () => {
+  const w = $("clearWrap");
+  w.innerHTML = '<span class="confirm"><span class="status">Remove all crew?</span><button class="btn danger" id="yesClear" type="button">Remove all</button><button class="btn" id="noClear" type="button">Cancel</button></span>';
+  $("yesClear").onclick = () => { rows=[]; Object.keys(thumbs).forEach(k=>delete thumbs[k]); save(); render(); resetClear(); setStatus("List cleared."); };
+  $("noClear").onclick = resetClear;
+};
+const clearHandler = $("clearBtn").onclick;
+function resetClear(){ $("clearWrap").innerHTML = '<button class="btn danger" id="clearBtn" type="button">Clear list</button>'; $("clearBtn").onclick = clearHandler; }
+
+load(); render();
+$("dbgCopy").onclick = async () => { try{ await navigator.clipboard.writeText(lastRead); setStatus("Copied."); }catch(e){ const r=document.createRange(); r.selectNodeContents($("dbgText")); const sel=getSelection(); sel.removeAllRanges(); sel.addRange(r); setStatus("Text selected. Use Copy from the menu."); } };
+
+</script>
+
+</body></html>

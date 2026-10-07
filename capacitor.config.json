@@ -1,0 +1,12 @@
+{
+  "appId": "com.johannkruger.crewlist",
+  "appName": "Crew List Scanner",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#f3f5f6"
+  },
+  "android": {
+    "backgroundColor": "#f3f5f6"
+  }
+}
